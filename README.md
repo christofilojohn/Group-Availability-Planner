@@ -28,7 +28,7 @@ Just share your .tsv s in as groupchat and let the app do the rest.
 - Per-person breakdown
 - Day/hour pattern analysis
 
-**Export to Calendar**
+**Export to Calendar (Coming Soon)**
 - Select final meeting times
 - Export as iCal (.ics) with weekly recurrence
 - Works with Apple Calendar, Google Calendar, Outlook
