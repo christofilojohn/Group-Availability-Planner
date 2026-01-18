@@ -1,6 +1,9 @@
 # Group Availability Planner
 
-A lightweight desktop app for coordinating schedules across teams. Simple, local scheduling.
+The perfect companion app to find an optimal meeting time in your groupchat.
+Send your schedule, receive theirs, and that's it !
+Simple, local scheduling - No cloud, no logging, everything is free!
+Just share your .tsv s in as groupchat and let the app do the rest. 
 
 [![Download](https://img.shields.io/github/v/release/christofilojohn/Group-Availability-Planner?label=Download&color=blueviolet)](https://github.com/christofilojohn/Group-Availability-Planner/releases/latest)
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
