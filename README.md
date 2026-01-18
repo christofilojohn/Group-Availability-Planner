@@ -56,10 +56,10 @@ python3 when_to_meet.py
 
 ## PyInstaller app distribution guide:
 
-###Windows:
+### Windows:
 pyinstaller --noconfirm --onefile --windowed --icon "images/app.ico" --name "GroupScheduler" "planner.py"
 
-###MacOS:
+### MacOS:
 pyinstaller --noconfirm --onedir --windowed --icon "images/app.icns" --name "GroupScheduler" "planner.py"
 
 ## License
