@@ -2,6 +2,7 @@
 
 A lightweight desktop app for coordinating schedules across teams. Simple, local scheduling.
 
+[![Download](https://img.shields.io/github/v/release/christofilojohn/Group-Availability-Planner?label=Download&color=blueviolet)](https://github.com/christofilojohn/Group-Availability-Planner/releases/latest)
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20|%20macOS%20|%20Linux-lightgrey.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
@@ -32,7 +33,7 @@ A lightweight desktop app for coordinating schedules across teams. Simple, local
 ## Quick Start
 
 ```bash
-python3 when_to_meet.py
+python3 planner.py
 ```
 
 **Requirements:** Python 3.8+ with tkinter (included on macOS/Windows; Linux: `sudo apt install python3-tk`)
