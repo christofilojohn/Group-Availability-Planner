@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-Group meeting scheduler - A simple scheduling tool with GUI
+Group Scheduler - A simple scheduling tool with GUI
 Features:
-- Calendar-style schedule creation (9 AM - 6 PM)
+- Calendar-style schedule creation (9 AM - 7 PM)
 - Drag to create multi-hour slots
 - Export schedules to TSV
 - Import multiple schedules and find overlaps
+- Click participant names to view individual availability
+- Clean statistics dashboard for finding best meeting times
 """
 
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, simpledialog
-from datetime import datetime, timedelta
+from tkinter import ttk, filedialog, messagebox
 import csv
 import os
 
@@ -20,7 +21,8 @@ class ScheduleCanvas(tk.Canvas):
 
     DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     START_HOUR = 9
-    END_HOUR = 19  # 7 PM
+    # Ends at 20, meaning the last slot is 19:00-20:00
+    END_HOUR = 20
 
     def __init__(self, parent, editable=True, **kwargs):
         super().__init__(parent, **kwargs)
@@ -155,6 +157,7 @@ class ScheduleCanvas(tk.Canvas):
 
     def on_mouse_down(self, event):
         """Handle mouse down - start drag selection."""
+        if not self.editable: return
         cell = self.get_cell_at(event.x, event.y)
         if cell:
             self.drag_start = cell
@@ -165,7 +168,7 @@ class ScheduleCanvas(tk.Canvas):
 
     def on_mouse_drag(self, event):
         """Handle mouse drag - extend selection."""
-        if not self.drag_start:
+        if not self.editable or not self.drag_start:
             return
 
         cell = self.get_cell_at(event.x, event.y)
@@ -175,7 +178,7 @@ class ScheduleCanvas(tk.Canvas):
 
     def on_mouse_up(self, event):
         """Handle mouse up - apply selection."""
-        if not self.drag_start:
+        if not self.editable or not self.drag_start:
             return
 
         if self.drag_current:
@@ -309,13 +312,13 @@ class OverlapCanvas(tk.Canvas):
         self.draw_grid()
 
 
-class WhenToMeetApp:
+class GroupSchedulerApp:
     """Main application window."""
 
     def __init__(self, root):
         self.root = root
-        self.root.title("When to Meet - Schedule Coordinator")
-        self.root.geometry("900x700")
+        self.root.title("Group Scheduler")
+        self.root.geometry("1000x800")  # Slightly wider for the new stats view
 
         self.username = ""
         self.loaded_schedules = {}  # {username: [(day, hour), ...]}
@@ -388,43 +391,80 @@ class WhenToMeetApp:
 
     def create_overlap_tab(self):
         """Create the overlap viewing tab."""
-        # Top frame - load files
-        top_frame = ttk.Frame(self.overlap_tab)
-        top_frame.pack(fill='x', pady=(0, 10))
+        # Main Layout: Left side (Controls + List) / Right side (Canvas)
+        paned = ttk.PanedWindow(self.overlap_tab, orient=tk.HORIZONTAL)
+        paned.pack(fill='both', expand=True, padx=5, pady=5)
 
-        ttk.Button(top_frame, text="📁 Load Schedule Files",
-                   command=self.load_schedules).pack(side='left', padx=5)
-        ttk.Button(top_frame, text="🗑️ Clear Loaded",
-                   command=self.clear_loaded_schedules).pack(side='left', padx=5)
-        ttk.Button(top_frame, text="📊 Export Analysis",
-                   command=self.export_analysis).pack(side='left', padx=5)
+        left_frame = ttk.Frame(paned, width=300)
+        right_frame = ttk.Frame(paned)
+        paned.add(left_frame, weight=1)
+        paned.add(right_frame, weight=3)
 
-        # Loaded files list
-        list_frame = ttk.LabelFrame(self.overlap_tab, text="Loaded Schedules")
+        # --- LEFT PANEL ---
+
+        # 1. Controls
+        control_frame = ttk.LabelFrame(left_frame, text="Controls")
+        control_frame.pack(fill='x', padx=5, pady=5)
+
+        ttk.Button(control_frame, text="📁 Load Files", command=self.load_schedules).pack(fill='x', padx=5, pady=2)
+        ttk.Button(control_frame, text="🗑️ Clear All", command=self.clear_loaded_schedules).pack(fill='x', padx=5,
+                                                                                                 pady=2)
+        ttk.Button(control_frame, text="📊 Export", command=self.export_analysis).pack(fill='x', padx=5, pady=2)
+
+        # 2. Loaded Participants List
+        list_frame = ttk.LabelFrame(left_frame, text="Participants (Click to view)")
         list_frame.pack(fill='x', padx=5, pady=5)
 
-        self.loaded_listbox = tk.Listbox(list_frame, height=4)
+        self.loaded_listbox = tk.Listbox(list_frame, height=6)
         self.loaded_listbox.pack(fill='x', padx=5, pady=5)
+        self.loaded_listbox.bind('<<ListboxSelect>>', self.on_participant_selected)
 
-        # Overlap canvas
-        canvas_frame = ttk.Frame(self.overlap_tab)
-        canvas_frame.pack(fill='both', expand=True)
+        # 3. Clean Statistics Dashboard
+        stats_frame = ttk.LabelFrame(left_frame, text="Analysis Dashboard")
+        stats_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
-        self.overlap_canvas = OverlapCanvas(canvas_frame, bg='white')
-        self.overlap_canvas.pack(pady=10)
+        # Summary Counters
+        summary_grid = ttk.Frame(stats_frame)
+        summary_grid.pack(fill='x', padx=5, pady=5)
 
-        # Stats frame
-        stats_frame = ttk.LabelFrame(self.overlap_tab, text="Statistics")
-        stats_frame.pack(fill='x', padx=5, pady=5)
+        ttk.Label(summary_grid, text="Participants:", font=('Arial', 9)).grid(row=0, column=0, sticky='w')
+        self.lbl_part_count = ttk.Label(summary_grid, text="0", font=('Arial', 9, 'bold'))
+        self.lbl_part_count.grid(row=0, column=1, sticky='e', padx=10)
 
-        self.stats_label = ttk.Label(stats_frame, text="Load schedules to see statistics")
-        self.stats_label.pack(padx=10, pady=10)
+        ttk.Label(summary_grid, text="Perfect Matches:", font=('Arial', 9)).grid(row=1, column=0, sticky='w')
+        self.lbl_match_count = ttk.Label(summary_grid, text="0", font=('Arial', 9, 'bold'), foreground='#1B5E20')
+        self.lbl_match_count.grid(row=1, column=1, sticky='e', padx=10)
 
-        # Legend
-        legend_frame = ttk.Frame(self.overlap_tab)
+        # Intersection List
+        ttk.Separator(stats_frame, orient='horizontal').pack(fill='x', pady=5)
+        ttk.Label(stats_frame, text="Perfect Overlap Times:", font=('Arial', 9, 'bold')).pack(anchor='w', padx=5)
+
+        # Treeview for slots
+        cols = ('day', 'time')
+        self.tree = ttk.Treeview(stats_frame, columns=cols, show='headings', height=10)
+        self.tree.heading('day', text='Day')
+        self.tree.heading('time', text='Time')
+        self.tree.column('day', width=80)
+        self.tree.column('time', width=60)
+
+        # Scrollbar for treeview
+        scrollbar = ttk.Scrollbar(stats_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+
+        self.tree.pack(side='left', fill='both', expand=True, padx=(5, 0), pady=5)
+        scrollbar.pack(side='right', fill='y', pady=5, padx=(0, 5))
+
+        # --- RIGHT PANEL (Canvas) ---
+
+        canvas_container = ttk.Frame(right_frame)
+        canvas_container.pack(fill='both', expand=True)
+
+        self.overlap_canvas = OverlapCanvas(canvas_container, bg='white')
+        self.overlap_canvas.pack(pady=10, padx=10)
+
+        # Legend (Horizontal under canvas)
+        legend_frame = ttk.Frame(right_frame)
         legend_frame.pack(pady=10)
-
-        ttk.Label(legend_frame, text="Legend:", font=('Arial', 9, 'bold')).pack(side='left', padx=(0, 10))
 
         colors = [
             ('#1B5E20', 'All Available'),
@@ -435,10 +475,39 @@ class WhenToMeetApp:
         ]
 
         for color, label in colors:
-            c = tk.Canvas(legend_frame, width=20, height=20)
-            c.create_rectangle(2, 2, 18, 18, fill=color, outline='gray')
-            c.pack(side='left')
-            ttk.Label(legend_frame, text=label).pack(side='left', padx=(2, 10))
+            c = tk.Canvas(legend_frame, width=15, height=15)
+            c.create_rectangle(0, 0, 15, 15, fill=color, outline='gray')
+            c.pack(side='left', padx=(10, 2))
+            ttk.Label(legend_frame, text=label, font=('Arial', 8)).pack(side='left')
+
+    def on_participant_selected(self, event):
+        """Handle selection of a participant from the listbox."""
+        selection = self.loaded_listbox.curselection()
+        if not selection:
+            return
+
+        item_text = self.loaded_listbox.get(selection[0])
+        username = item_text.split(" (")[0]
+
+        if username in self.loaded_schedules:
+            self.show_participant_popup(username, self.loaded_schedules[username])
+
+    def show_participant_popup(self, username, schedule_data):
+        """Show a popup window with the participant's schedule."""
+        popup = tk.Toplevel(self.root)
+        popup.title(f"Schedule: {username}")
+        popup.geometry("800x600")
+
+        ttk.Label(popup, text=f"Availability for {username}", font=('Arial', 12, 'bold')).pack(pady=10)
+
+        canvas_frame = ttk.Frame(popup)
+        canvas_frame.pack(fill='both', expand=True, padx=10, pady=10)
+
+        p_canvas = ScheduleCanvas(canvas_frame, editable=False, bg='white')
+        p_canvas.pack(pady=5)
+        p_canvas.set_schedule_data(schedule_data)
+
+        ttk.Button(popup, text="Close", command=popup.destroy).pack(pady=10)
 
     def clear_schedule(self):
         """Clear the current schedule."""
@@ -453,7 +522,7 @@ class WhenToMeetApp:
 
         schedule_data = self.schedule_canvas.get_schedule_data()
         if not schedule_data:
-            messagebox.showwarning("Warning", "Your schedule is empty. Please select some available times.")
+            messagebox.showwarning("Warning", "Your schedule is empty.")
             return
 
         filename = filedialog.asksaveasfilename(
@@ -480,7 +549,7 @@ class WhenToMeetApp:
         """Load multiple schedule files."""
         filenames = filedialog.askopenfilenames(
             filetypes=[("TSV files", "*.tsv"), ("CSV files", "*.csv"), ("All files", "*.*")],
-            title="Select Schedule Files (hold Ctrl/Cmd for multiple)"
+            title="Select Schedule Files"
         )
 
         if not filenames:
@@ -503,7 +572,6 @@ class WhenToMeetApp:
                         schedule.append((day, hour))
 
                     if username and schedule:
-                        # Handle duplicate usernames
                         base_username = username
                         counter = 1
                         while username in self.loaded_schedules:
@@ -523,14 +591,19 @@ class WhenToMeetApp:
         self.loaded_schedules.clear()
         self.loaded_listbox.delete(0, tk.END)
         self.overlap_canvas.set_overlaps({}, 0)
-        self.stats_label.config(text="Load schedules to see statistics")
+
+        # Reset Stats
+        self.lbl_part_count.config(text="0")
+        self.lbl_match_count.config(text="0")
+        for item in self.tree.get_children():
+            self.tree.delete(item)
 
     def update_overlaps(self):
         """Calculate and display overlaps."""
         if not self.loaded_schedules:
             return
 
-        # Count overlaps
+        # 1. Count overlaps
         overlap_counts = {}
         for username, schedule in self.loaded_schedules.items():
             for cell in schedule:
@@ -539,36 +612,28 @@ class WhenToMeetApp:
         total = len(self.loaded_schedules)
         self.overlap_canvas.set_overlaps(overlap_counts, total)
 
-        # Calculate statistics
-        all_slots = set()
-        for schedule in self.loaded_schedules.values():
-            all_slots.update(schedule)
+        # 2. Update Statistics Dashboard
 
-        # Find slots where everyone is available
-        full_overlap = [cell for cell, count in overlap_counts.items() if count == total]
+        # Find perfect overlaps (Intersections)
+        full_overlap_slots = [cell for cell, count in overlap_counts.items() if count == total]
+        full_overlap_slots.sort()
 
-        # Calculate union (at least one person available)
-        union_count = len(all_slots)
+        # Update labels
+        self.lbl_part_count.config(text=str(total))
+        self.lbl_match_count.config(text=str(len(full_overlap_slots)))
 
-        # Best slots (sorted by overlap count)
-        best_slots = sorted(overlap_counts.items(), key=lambda x: -x[1])[:5]
+        # Update Treeview (Clear first)
+        for item in self.tree.get_children():
+            self.tree.delete(item)
 
-        stats_text = f"Participants: {total}\n"
-        stats_text += f"Total unique slots (union): {union_count}\n"
-        stats_text += f"Slots with everyone available (intersection): {len(full_overlap)}\n\n"
-
-        if full_overlap:
-            stats_text += "Full overlap times:\n"
-            for day, hour in sorted(full_overlap)[:10]:
-                stats_text += f"  • {ScheduleCanvas.DAYS[day]} {hour:02d}:00\n"
-            if len(full_overlap) > 10:
-                stats_text += f"  ... and {len(full_overlap) - 10} more\n"
-        elif best_slots:
-            stats_text += "Best times (highest overlap):\n"
-            for (day, hour), count in best_slots:
-                stats_text += f"  • {ScheduleCanvas.DAYS[day]} {hour:02d}:00 - {count}/{total} available\n"
-
-        self.stats_label.config(text=stats_text)
+        if full_overlap_slots:
+            for day, hour in full_overlap_slots:
+                day_name = ScheduleCanvas.DAYS[day]
+                time_str = f"{hour:02d}:00"
+                self.tree.insert('', 'end', values=(day_name, time_str))
+        else:
+            # Optional: If no perfect overlap, maybe show "None"
+            pass
 
     def export_analysis(self):
         """Export the overlap analysis to a file."""
@@ -586,7 +651,6 @@ class WhenToMeetApp:
             return
 
         try:
-            # Calculate overlaps
             overlap_counts = {}
             for username, schedule in self.loaded_schedules.items():
                 for cell in schedule:
@@ -618,7 +682,7 @@ class WhenToMeetApp:
 
 def main():
     root = tk.Tk()
-    app = WhenToMeetApp(root)
+    app = GroupSchedulerApp(root)
     root.mainloop()
 
 

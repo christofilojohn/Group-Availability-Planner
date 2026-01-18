@@ -54,6 +54,14 @@ python3 when_to_meet.py
 | Cost | Free | Often freemium |
 | Ease of Use | Medium | ✓ |
 
+## PyInstaller app distribution guide:
+
+###Windows:
+pyinstaller --noconfirm --onefile --windowed --icon "images/app.ico" --name "GroupScheduler" "planner.py"
+
+###MacOS:
+pyinstaller --noconfirm --onedir --windowed --icon "images/app.icns" --name "GroupScheduler" "planner.py"
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
